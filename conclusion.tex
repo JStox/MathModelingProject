@@ -1,0 +1,43 @@
+In order to provide relief for Puerto Rico after the hurricane, we have presented a model that is the most efficient system of delivery routes and cargo container positioning. Under various simplifying assumptions, some our key findings are: 
+\begin{itemize}
+    \item At least three cargo containers must be used in order to reach all the hospitals
+    \item Drone B is the best drone choice overall because it has the fastest speed and the greatest range, making it ideal for both fast delivery and high road reconnaissance coverage
+    \item There is a unique best configuration for cargo container base locations
+    $$(18.25,-66.65), (18.25, -66.2), (18.2, -65.85)$$
+    which allows us to service all hospitals for 1146 days and conduct road surveillance at 97 road points. 
+    \item The medical supply demand for each grouping of hospitals is different, so each cargo container will contain supplies that last for different number of days. Hence, as shown in our flight plan, it is possible for containers to change the hospital(s) that they service after a certain number of days. 
+    \item With three B drones, we can complete all required deliveries as well as conduct at least 6 hours of reconnaissance per day.
+\end{itemize}
+
+\subsection{Model Assessment}
+In this section we assess the validity of our model by addressing the assumptions we made in order to simplify the underlying mechanism of our model, and how they can be advantageous and/or pose limitations.
+
+\paragraph{Advantages} Our model gives us a good idea about things like:
+\begin{itemize}
+    \item How long we can service all the hospitals for,
+    \item The optimal cargo container base locations and hospital groupings, and 
+    \item The types of drones we should opt for and their flight schedules.
+\end{itemize}
+
+\paragraph{Limitations}
+\begin{itemize}
+    \item A main condition that our model depends on is the assumption that volume is the only factor determining storage capabilities. This is unrealistic because containers and packages are not fluid, and configurations/dimensions must be taken into account when packing. This assumption also results in our model overestimating the number of days for which we can service the hospitals. 
+    \item Drones' ability to fly and unload could be impaired at night. We assumed that drones can deliver anytime during the 24 hours, but if we were to limit this to the 12 hours of daylight, our model no longer meets the daily medical supply demand. To deal with this, we need to replace some of the medical packages with extra drones so we can have multiple drones performing deliveries simultaneously. We note that this decreases the number of days that we can service the hospitals. 
+    \item Surveillance drones cannot go beyond their flight range. Because of where the hospitals and our home bases are located, road reconnaissance of the southwest parts of the island is impossible. 
+\end{itemize}
+
+
+\subsection{Future Work}
+As discussed above, as a result of the assumptions we made over the course of model derivation, there are various limitations to our model. In this section, we propose ways in which we can address several of these limitations and enhance our model. Specifically, we will reduce some of the existing assumptions in order to make the model more refined and realistic. We will not produce any explicit models here, and will simply discuss how conditions should be considered and analyze how the overall quality of our model will be improved.
+
+\subsubsection{Storage Configurations}
+Although we were able to greatly simplify the mathematical computations by only considering volumes when optimizing for container storage, this assumption remains highly unrealistic. In a future model, 3D-space optimization should be taken into account where packages can be arranged by fitting them into a container in the order of decreasing sizes. 
+
+\subsubsection{Base Location Restrictions}
+In our existing model, we assumed that base locations can be anywhere on the island as long as it is reasonable. This condition can be refined in many ways: bases must be at the ports, near major freeways or near cities with high population densities. 
+
+\subsubsection{Drone Performance}
+Rather than maintaining constant performance, it is likely that drones will experience a decrease in speed, range, and/or battery life with added weight. To address this, we could assume linear dependency between the drone's speed and the weight of its package, where its speed decreases as package weight increases.
+
+\subsubsection{Topography}
+Lastly, our model ignores the effects of topography and elevation. However, this assumption places less limitation on the system than the rest because drones can simply fly over any obtrusive geographical features. The only trade-off would be a decrease in horizontal range in order to compensate for increased flight height.

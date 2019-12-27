@@ -1,0 +1,505 @@
+ \documentclass[12pt]{article}
+
+%% Useful packages
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb, amsopn, amsthm, mathtools} % packages to use mathematics 
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage[colorlinks=true]{hyperref}
+\usepackage[hang, small,labelfont=bf,up,textfont=it,up]{caption} % Custom captions under/above floats in tables or figures
+\usepackage{booktabs} % Horizontal rules in tables
+\usepackage{blindtext} % This package allows me to put in dummy text
+\usepackage[margin=0.9in]{geometry}
+
+\newcommand{\integ}[2]{\int_{#2}^{#1}} % Integral from 0 to t
+\newcommand{\dd}{\mathrm{d}} % differential d
+\newcommand{\e}{\mathrm{e}} % e
+\newcommand{\ul}{\underline} % to underline things
+\newcommand{\q}{\quad} % to indent things
+\newcommand{\qq}{\qquad} % to indent things
+\newcommand{\eps}{\epsilon} % even too lazy to write \epsilon
+\newcommand{\pder}[2]{\frac{\partial{#1}}{\partial{#2}}} %partial derivative
+\newcommand{\pdiff}[2]{\frac{\partial{#1}}{\partial{#2}}} %partial derivative
+\newcommand{\diff}[2]{\frac{\dd {#1}}{\dd {#2}}} %derivative
+\newcommand{\ol}{\overline}
+
+\title{Drones: How to Best Serve Puerto Rico}
+\author{Charles Stoksik \and Colleen Sun \and Geoff Harrison \and Mariam Alghamdi}
+\date{November 2019}
+
+\usepackage{natbib}
+\usepackage{graphicx}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Summary                   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\pagebreak
+\section*{Summary}
+\input{summary.tex}
+
+\pagebreak
+\section*{Memo}
+\input{memo.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Introduction                   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\pagebreak
+\section{Introduction}
+\input{introduction.tex}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Base Model                   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Base Model}
+\input{base_model.tex}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Conclusion                   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\input{conclusion.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% References                   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\nocite{*}
+\bibliographystyle{unsrt}
+\raggedright
+\bibliography{references.bib}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Appendix                   
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\clearpage
+\appendix
+\section{Appendix: R script optimizing for hospital service}
+The below R file is the implementation of the simulations and calculation of the resulting heuristic "days" described in the above report. The R code can be run in any R distribution that has packages dplyr, ggplot2, ggmap, and osmdata installed, but be warned that the code may take a very long time to execute, especially if candidate\_lon and candidate\_lat are very large.
+
+<<chunk1, eval = F>>=
+library(dplyr)
+library(ggplot2)
+library(ggmap)
+library(osmdata)
+
+# define hospital data...
+
+pr_data <- data.frame(lat = c(18.33, 18.22, 18.44, 18.4, 18.47), 
+                      lon = c(-65.65, -66.03, -66.07, -66.16, -66.73))
+pr_data$x <- 105.71 * pr_data$lon
+pr_data$y <- 110.68 * pr_data$lat
+pr_data$daily_volume <- c(826, 1316, 690, 1852, 490)
+rownames(pr_data) <- c("Fajardo", 
+                       "San Pablo", 
+                       "San Juan", 
+                       "Bayamon", 
+                       "Arecibo")
+
+pr_map <- get_map(getbb("Puerto Rico"), maptype="terrain")
+pr_map_hosp <- ggmap(pr_map) + geom_point(data = pr_data[1:2], color = "red", size = 3)
+
+
+dist <- function(p1, p2) {
+  x1 <- p1[1]
+  y1 <- p1[2]
+  x2 <- p2[1]
+  y2 <- p2[2]
+  
+  return (as.numeric(sqrt((x2 - x1)^2 + (y2 - y1)^2)))
+}
+
+
+# "special points" that place constraints on C1, C3 - give names to invoke these more easily
+arecibo <- pr_data[5, 3:4]
+fajardo <- pr_data[1, 3:4]
+
+# define drone types - A, H considered unimportant
+droneB <- list(volume = (30 * 30 * 22), 
+               payload = 8, 
+               range = 79 * (40/60), 
+               video = T, 
+               type = 1)
+droneC <- list(volume = 60 * 50 * 30, 
+               payload = 14, 
+               range = 64 * (35 / 60), 
+               video = T, 
+               type = 2)
+droneD <- list(volume = (25 * 20 * 25), 
+               payload = 11, 
+               range = 60 * (18/60), 
+               video = T, 
+               type = 1)
+droneE <- list(volume = (25 * 20 * 27), 
+               payload = 15, 
+               range = 60 * (15/60), 
+               video = T, 
+               type = 2)
+droneF <- list(volume = (40 * 40 * 25), 
+               payload = 22, 
+               range = 79 * (24/60), 
+               video = F, 
+               type = 2)
+droneG <- list(volume = (32 * 32 * 17), 
+               payload = 20, 
+               range = 64 * (16/60), 
+               video = T, 
+               type = 2)
+
+drones <- list(droneB, droneC, droneD, droneE, droneF, droneG)
+
+
+candidate_lon <- seq(-67.2, -65.6, by = 0.05)
+candidate_lat <- seq(18, 18.5, by = 0.05)
+candidate_x <- candidate_lon * 105.71
+candidate_y <- candidate_lat * 110.68
+
+
+# filter these "candidate points" by our constraints
+C1 <- expand.grid(candidate_x, candidate_y)
+colnames(C1) <- c("x", "y")
+C1test <- data.frame(x = double(0), y = double(0))
+for (i in 1:nrow(C1)) {
+  if (dist(c(C1$x[i], C1$y[i]), arecibo) < 0.5 * droneB$range) {
+    C1test <- rbind(C1test, C1[i,])
+  }
+}
+C1 <- C1test
+
+C3 <- expand.grid(candidate_x, candidate_y)
+colnames(C3) <- c("x", "y")
+C3test <- data.frame(x = double(0), y = double(0))
+for (i in 1:nrow(C3)) {
+  if (dist(c(C3$x[i], C3$y[i]), fajardo) < 0.5 * droneB$range) {
+    C3test <- rbind(C3test, C3[i,])
+  }
+}
+C3 <- C3test
+
+
+C2 <- expand.grid(candidate_x, candidate_y)
+colnames(C2) <- c("x", "y")
+C2 <- subset(C2, x > max(C1$x) & x < min(C3$x) & y >= 2016.59) 
+# In between the "circles" about A and F, and above SP
+C2test <- data.frame(x = double(0), y = double(0))
+for (i in 1:nrow(C2)) {
+  if (dist(c(C2$x[i], C2$y[i]), c(pr_data$x[4], pr_data$y[4])) < 0.5 * droneB$range) { 
+    # must be within range of B
+    C2test <- rbind(C2test, C2[i,])
+  }
+}
+C2 <- C2test
+
+
+combs <- data.frame(expand.grid(1:nrow(C1), 
+                                1:nrow(C2), 
+                                1:nrow(C3), 
+                                1:length(drones), 
+                                1:length(drones), 
+                                1:length(drones)))
+colnames(combs) <- c("C1_index", "C2_index", "C3_index", 
+                     "Drone1_index", "Drone2_index", "Drone3_index")
+
+
+current_max_days <- 0
+max_indeces <- NA
+max_spare_volumes <- 0
+groupings <- NA
+grouping_hospitals <- NA
+
+candidate_max_indices <- data.frame(
+  C1 = integer(), 
+  C2 = integer(), 
+  C3 = integer(), 
+  Drone1 = integer(), 
+  Drone2 = integer(), 
+  Drone3 = integer()
+)
+candidate_spare_volumes <- list()
+candidate_groupings <- list()
+candidate_grouping_hospitals <- list()
+
+for (i in 1:nrow(combs)) {
+  curr <- as.numeric(combs[i,])
+  contain1 <- C1[curr[1],]
+  contain2 <- C2[curr[2],]
+  contain3 <- C3[curr[3],]
+  drone1 <- drones[[curr[4]]]
+  drone2 <- drones[[curr[5]]]
+  drone3 <- drones[[curr[6]]]
+  drone_range <- c(drone1$range, drone2$range, drone3$range)
+  drone_volumes <- c(drone1$volume, drone2$volume, drone3$volume)
+  
+  # establish which containers can serve which hospitals directly
+  c1_hosp <- integer(0)
+  c2_hosp <- integer(0)
+  c3_hosp <- integer(0)
+  for (k in 1:nrow(pr_data)) {
+    hosp <- pr_data[k,3:4]
+    if (dist(contain1, hosp) < drone1$range / 2) {c1_hosp <- c(c1_hosp, k)}
+    if (dist(contain2, hosp) < drone2$range / 2) {c2_hosp <- c(c2_hosp, k)}
+    if (dist(contain3, hosp) < drone3$range / 2) {c3_hosp <- c(c3_hosp, k)}
+  }
+  
+  if (length(unique(c(c1_hosp,c2_hosp,c3_hosp))) != 5) next # cannot serve all hospitals
+  
+  
+  groups <- list() # list of groupings
+  group_hosps <- list() # indeces of hospitals for each group
+  # groups is a list. each item in groups is a list containing 1 or more rows from C1,C2,etc.
+  # define groups - there will be 1-3 of them
+  if ((dist(contain1, contain2) < drone1$range) & (dist(contain1, contain2) < drone2$range)) {
+    groups <- list(c(1, 2))
+    group_hosps[[1]] <- c(c1_hosp, c2_hosp)
+  } else {
+    groups <- list(c(1), c(2))
+    group_hosps[[1]] <- c1_hosp
+    group_hosps[[2]] <- c2_hosp
+  }
+  if ((dist(contain2, contain3) < drone2$range) & (dist(contain2, contain3) < drone3$range)) {
+    if (length(groups) == 1) { # 1 and 2 are in the same group - group 1
+      groups[[1]] <- c(groups[[1]], c(3))
+      group_hosps[[1]] <- c(group_hosps[[1]], c3_hosp)
+    } else {
+      groups[[2]] <- c(groups[[2]], c(3))
+      group_hosps[[2]] <- c(group_hosps[[2]], c3_hosp)
+    }
+  } else {
+    groups <- c(groups, list(c(3)))
+    group_hosps <- c(group_hosps, list(c3_hosp))
+  }
+  
+  # groups now defined, between 1 and 3 of them, 
+  # and between 1 and 3 containers in each
+  
+  
+  group_max_days = integer(length(groups)) 
+  # how many supplies can each group supply its hospitals?
+  spare_volume = integer(length(groups))
+  # calculate group's daily requirements, cargo volume, 
+  # max days of supplies, leftover space
+  for (j in 1:length(groups)) {
+    group_hosps_unique <- unique(group_hosps[[j]]) # remove duplicates
+    group_required_volume <- sum(pr_data$daily_volume[group_hosps_unique]) 
+    # sum up daily requirements
+    total_cargo_space <- 
+      length(groups[[j]]) * (19 * 12 + 3) * (7 * 12 + 8) * (7 * 12 + 10) - 
+        sum(drone_volumes[groups[[j]]])
+      # volume of group container interiors
+    group_max_days[j] <- total_cargo_space %/% group_required_volume 
+    # Integer division
+    spare_volume[j] <- total_cargo_space - 
+        (group_max_days[j] * group_required_volume)
+  }
+  
+  min_days <- min(group_max_days) 
+  # The max days we can supply all hospitals for is the min of the days we can supply each group
+  if (min_days >= current_max_days) {
+    if ((min_days > current_max_days) || (sum(spare_volume) > sum(max_spare_volumes))) {
+      current_max_days <- min_days
+      max_indeces <- curr # indeces of C1, C2, C3, drone1, drone2, drone3
+      candidate_max_indices <- data.frame(
+        C1 = curr[1], 
+        C2 = curr[2], 
+        C3 = curr[3], 
+        Drone1 = curr[4], 
+        Drone2 = curr[5], 
+        Drone3 = curr[6]
+      )
+      
+      max_spare_volumes <- spare_volume
+      candidate_spare_volumes <- list(spare_volume)
+      
+      groupings <- groups
+      candidate_groupings <- list(groups)
+      
+      grouping_hospitals <- group_hosps
+      candidate_grouping_hospitals <- list(group_hosps)
+      
+    } else if (sum(spare_volume) >= sum(max_spare_volumes)) {
+      candidate_max_indices <- rbind(candidate_max_indices, curr)
+      candidate_spare_volumes <- c(candidate_spare_volumes, list(spare_volume))
+      candidate_groupings <- c(candidate_groupings, list(groups))
+      candidate_grouping_hospitals <- c(candidate_grouping_hospitals, list(group_hosps))
+    }
+    
+  }
+  
+}
+
+# we obtain a max days of 1146
+
+@
+
+\clearpage
+\section{Appendix: R script optimizing for road reconnaissance}
+
+The below script, placeforroads.R, assumes that the script in Appendix A has been completed successfully. In such a case, several list structures corresponding to the potentially optimal configurations for container placement and drone selection, as well as the groupings employed by those configurations, are known to exist. The below script simply defines a set of points overlaid on a map of Puerto Rico that represents areas of the island containing major numbered highways, and counts for every given configuration how many of those points are within reach. The configuration that uniquely maximizes this count of "road points" is considered the optimal one.  
+
+<<chunk2, eval = F>>=
+# NOT TO BE RUN BEFORE hospital placement - depends on that script's helpers and data
+
+library(ggplot2)
+library(dplyr)
+library(ggmap)
+
+candidate_lon2 <- seq(-67.2, -65.6, by = 0.05)
+candidate_lat2 <- seq(18, 18.5, by = 0.05)
+candidate_x2 <- candidate_lon * 105.71
+candidate_y2 <- candidate_lat * 110.68
+
+road_points <- expand.grid(candidate_lat2, candidate_lon2)
+colnames(road_points) <- c("lat", "lon")
+
+
+# Assumed that we have candidate_max_indices, candidate_spare_volumes,
+# candidate_groupings, candidate_grouping_hospitals
+
+# define hospital data... uncomment these lines if you don't have the data already
+#pr_data <- data.frame(lat = c(18.33, 18.22, 18.44, 18.4, 18.47), 
+# lon = c(-65.65, -66.03, -66.07, -66.16, -66.73))
+#pr_data$x <- 105.71 * pr_data$lon
+#pr_data$y <- 110.68 * pr_data$lat
+#pr_data$daily_volume <- c(826, 1316, 690, 1852, 490)
+#rownames(pr_data) <- c("Jajardo", "San Pablo", "San Juan",
+# "Bayamon", "Arecibo")
+pr_map <- get_map(getbb("Puerto Rico"), maptype="terrain")
+pr_map_finer <- ggmap(pr_map) + 
+    geom_point(data = pr_data[1:2], color = "red", size = 3) +
+    geom_point(data = road_points, color = "black", size = 1)
+
+# We have determined via bruteforce.R that we have some set of triples that provide
+# service to all hospitals for the maximum number of days feasible. We have also
+# concluded that we will be using Drone B in all locations, and that there is no
+# space for extra drones. We therefore must optimize for road surveillance within
+# the constraints of using these three drones only.
+road_points <- subset(road_points, lat < 18.5 | 
+                        (lon >= -67.1 & lon <= -67.05))
+# From the map pr_map_finer, we can see that some points are clearly over water.
+# Obviously there are no roads running out that way,
+# Eliminate these manually...
+
+# Eliminate points that are off the north coast
+road_points <- subset(road_points, lat < 18.5 | 
+                        (lon >= -67.1 & lon <= -67.05))
+# Eliminate points off the west coast
+road_points <- subset(road_points, lon > -67.2 | 
+                        (lat >= 18.3 & lat <= 18.35))
+# Eliminate points off the east coast
+road_points <- subset(road_points, lon <= -65.65)
+# Eliminate points off the southeast coast
+road_points <- subset(road_points, lon < -65.75 | lat > 18.15)
+# Eliminate points off the northeast
+road_points <-subset(subset(road_points, lat < 18.45 | lon < -65.9), 
+                     (lon < -65.8 | lat < 18.4))
+
+# Eliminate points in El Yunque National Forest
+road_points <- subset(road_points, (lat < 18.25 | lat > 18.35) | 
+                        (lon < -65.9 | lon > - 65.7))
+
+# Eliminate the empty area west of Caguas / San Pablo
+road_points <- subset(road_points, (lat < 18.2 | lat > 18.3) | 
+                        (lon < -66.5 | lon > - 66.1))
+
+# Eliminate the empty area south of San Lorenzo (near Caguas)
+road_points <- subset(road_points, (lat < 18.05 | lat > 18.15) | 
+                        (lon < -66.05 | lon > - 65.85))
+
+# Eliminate the area south of Arecibo and north of Ponce
+road_points <- subset(road_points, (lat < 18.15 | lat > 18.41) | 
+                        (lon < -66.67 | lon > - 66.55))
+
+# Eliminate are south of Lares, between Mayaguez and Garzas Adjuntas
+road_points <- subset(road_points, (lat < 18.137 | lat > 18.286) | 
+                        (lon < -67.136 | lon > - 66.737))
+
+# Eliminate the remaining "triangle" part south of San Sebastian that wasn't 
+# eliminated by the above
+road_points <- subset(road_points, !(lat > 18.286 & 
+                                    lon < -66.737 & 
+                                    lon > -67.136 & 
+                                    lat < 1.35759 - 0.253659 * lon))
+#(lon < -65.8 | lat < 18.4)
+
+
+# Now we're ready to evaluate our candidate locations. Assuming each uses drone B,
+# see for each triple how many points in road_points are within service radius.
+road_point_map <- ggmap(pr_map) + 
+    geom_point(data = pr_data[1:2], color = "red", size = 3) +
+     geom_point(data = road_points, color = "black", size = 1)
+
+# Convert to km coordinates for distance calculations
+road_points$x <- road_points$lon * 105.71
+road_points$y <- road_points$lat * 110.68
+
+
+current_max_reachable_points <- 0
+best_configs <- data.frame(
+  C1 = integer(), 
+  C2 = integer(), 
+  C3 = integer(), 
+  Drone1 = integer(), 
+  Drone2 = integer(), 
+  Drone3 = integer()
+)
+
+for (i in 1:nrow(candidate_max_indices)) {
+  curr <- as.numeric(candidate_max_indices[i,])
+  contain1 <- C1[curr[1],] # C1, C2, C3, drones defined in placeforhosp.R
+  contain2 <- C2[curr[2],]
+  contain3 <- C3[curr[3],]
+  drone1 <- drones[[curr[4]]]
+  drone2 <- drones[[curr[5]]]
+  drone3 <- drones[[curr[6]]]
+  
+  total_reachable_points <- 0
+  for (j in 1:nrow(road_points)) {
+    pt <- road_points[j,3:4]
+    
+    # not the most efficient way of doing this but it reuses lines from
+    # the earlier script
+    if (dist(contain1, pt) < drone1$range / 2) {
+      total_reachable_points <- total_reachable_points + 1
+    }
+    if (dist(contain2, pt) < drone2$range / 2) {
+      total_reachable_points <- total_reachable_points + 1
+    }
+    if (dist(contain3, pt) < drone3$range / 2) {
+      total_reachable_points <- total_reachable_points + 1
+    }
+  }
+  
+  # update running best configs
+  if (total_reachable_points >= current_max_reachable_points) {
+    if (total_reachable_points > current_max_reachable_points){
+      current_max_reachable_points <- total_reachable_points
+      best_configs <- data.frame(
+        C1 = curr[1], 
+        C2 = curr[2], 
+        C3 = curr[3], 
+        Drone1 = curr[4], 
+        Drone2 = curr[5], 
+        Drone3 = curr[6]
+      )
+    } else {
+      best_configs <- rbind(best_configs, curr)
+    }
+  }
+}
+
+# We acquire the following unique optimizer:
+#             x        y   lat    lon
+# 177 -7045.572 2019.910 18.25 -66.65
+# 186 -6998.002 2019.910 18.25 -66.20
+# 160 -6961.004 2014.376 18.20 -65.85
+
+@
+\end{document}
